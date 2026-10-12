@@ -1,57 +1,18 @@
-"""Bot 1 : actu du jour France + Monde, résumée par Gemini, avec sources."""
-import os
-from datetime import datetime
-from zoneinfo import ZoneInfo
-from common import *
-
-FLUX_FRANCE = {
-    "franceinfo": "https://www.francetvinfo.fr/france.rss",
-    "Le Monde": "https://www.lemonde.fr/politique/rss_full.xml",
-    "Le Figaro": "https://www.lefigaro.fr/rss/figaro_actualites.xml",
-    "Libération": "https://www.liberation.fr/arc/outboundfeeds/rss-all/collection/accueil-une/?outputType=xml",
-    "20 Minutes": "https://www.20minutes.fr/feeds/rss-une.xml",
-    "Ouest-France": "https://www.ouest-france.fr/rss/une",
-}
-FLUX_MONDE = {
-    "France 24": "https://www.france24.com/fr/rss",
-    "RFI": "https://www.rfi.fr/fr/rss",
-    "BBC News": "https://feeds.bbci.co.uk/news/world/rss.xml",
-    "DW": "https://rss.dw.com/rdf/rss-fr-all",
-    "Al Jazeera": "https://www.aljazeera.com/xml/rss/all.xml",
-    "Le Monde": "https://www.lemonde.fr/international/rss_full.xml",
-    "Le Figaro": "https://www.lefigaro.fr/rss/figaro_international.xml",
-    "franceinfo": "https://www.francetvinfo.fr/monde.rss",
-}
-
-
-def synthese(arts, zone, couleur, nb=5):
-    if len(arts) < 3:
-        return []
-    prompt = f"""Voici des articles récents ({zone}), numérotés :
-{articles_pour_prompt(arts)}
-
-Sélectionne les {nb} événements les plus importants (ceux couverts par le plus de médias différents d'abord).
-Pour chacun, regroupe les articles qui en parlent et rédige un résumé neutre de 3 à 4 phrases.
-Réponds en JSON : {{"histoires":[{{"titre":"titre factuel sans sensationnalisme","resume":"...","sources":[numéros des articles utilisés]}}]}}"""
-    texte, _ = gemini(prompt, system=REGLES_NEUTRALITE, json_out=True)
-    return histoires_en_embeds(parse_json(texte)["histoires"], arts, couleur)
-
-
-def main():
-    webhook = os.environ["WEBHOOK_ACTU_JOUR"]
-    date = datetime.now(ZoneInfo("Europe/Paris")).strftime("%d/%m/%Y")
-    france = fetch_articles(FLUX_FRANCE, 24, 10)
-    monde = fetch_articles(FLUX_MONDE, 24, 10)
-    embeds = []
-    for e in synthese(france, "France", 0x3498DB):
-        e["title"] = "🇫🇷 " + e["title"]
-        embeds.append(e)
-    for e in synthese(monde, "Monde", 0x2ECC71):
-        e["title"] = "🌍 " + e["title"]
-        embeds.append(e)
-    if embeds:
-        post_discord(webhook, "Actu du jour", f"📰 **Les actus du {date}** — résumées de façon neutre à partir de plusieurs médias", embeds)
-
-
-if __name__ == "__main__":
-    main()
+name: Actu du jour
+on:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - run: python bot_actu_jour.py
+        env:
+          WEBHOOK_ACTU_JOUR: ${{ secrets.WEBHOOK_ACTU_JOUR }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
