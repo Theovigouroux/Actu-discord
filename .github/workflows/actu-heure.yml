@@ -1,54 +1,26 @@
-"""Bot 2 : actu mondiale mise à jour toutes les heures (nouveaux articles seulement)."""
-import os
-import json
-from datetime import datetime
-from zoneinfo import ZoneInfo
-from common import *
-
-STATE = "seen.json"
-
-FLUX_MONDE = {
-    "France 24": "https://www.france24.com/fr/rss",
-    "RFI": "https://www.rfi.fr/fr/rss",
-    "BBC News": "https://feeds.bbci.co.uk/news/world/rss.xml",
-    "DW": "https://rss.dw.com/rdf/rss-fr-all",
-    "Al Jazeera": "https://www.aljazeera.com/xml/rss/all.xml",
-    "Le Monde": "https://www.lemonde.fr/international/rss_full.xml",
-    "Le Figaro": "https://www.lefigaro.fr/rss/figaro_international.xml",
-    "franceinfo": "https://www.francetvinfo.fr/monde.rss",
-}
-
-
-def charger():
-    try:
-        with open(STATE, encoding="utf-8") as f:
-            return json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
-        return []
-
-
-def main():
-    webhook = os.environ["WEBHOOK_ACTU_HEURE"]
-    deja = set(charger())
-    arts = [a for a in fetch_articles(FLUX_MONDE, 3, 8) if a["link"] not in deja]
-    print(f"{len(arts)} nouvel(le)s article(s)")
-
-    if len(arts) >= 2:
-        prompt = f"""Voici de NOUVEAUX articles internationaux, numérotés :
-{articles_pour_prompt(arts)}
-
-Regroupe-les par événement et garde les 5 plus importants. Pour chacun, rédige un résumé neutre de 2 à 3 phrases.
-Réponds en JSON : {{"histoires":[{{"titre":"titre factuel","resume":"...","sources":[numéros des articles utilisés]}}]}}"""
-        texte, _ = gemini(prompt, system=REGLES_NEUTRALITE, json_out=True)
-        embeds = histoires_en_embeds(parse_json(texte)["histoires"], arts, 0xE67E22)
-        if embeds:
-            heure = datetime.now(ZoneInfo("Europe/Paris")).strftime("%Hh%M")
-            post_discord(webhook, "Actu Monde (live)", f"🔄 **Mise à jour de l'actu mondiale — {heure}**", embeds)
-
-    tous = [a["link"] for a in arts] + list(deja)
-    with open(STATE, "w", encoding="utf-8") as f:
-        json.dump(tous[:1000], f)
-
-
-if __name__ == "__main__":
-    main()
+name: C2.jpeg
+on:
+  schedule:
+    - cron: "0 * * * *"
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - run: python bot_actu_heure.py
+        env:
+          WEBHOOK_ACTU_HEURE: ${{ secrets.WEBHOOK_ACTU_HEURE }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      - name: Sauvegarde
+        run: |
+          git config user.name "actu-bot"
+          git config user.email "actu-bot@users.noreply.github.com"
+          git add seen.json
+          git diff --staged --quiet || (git commit -m "maj seen.json" && git push)
