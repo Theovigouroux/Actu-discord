@@ -4,10 +4,19 @@ import json
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from common import *
-from bot_actu_jour import FLUX_MONDE
 
-WEBHOOK = os.environ["WEBHOOK_ACTU_HEURE"]
 STATE = "seen.json"
+
+FLUX_MONDE = {
+    "France 24": "https://www.france24.com/fr/rss",
+    "RFI": "https://www.rfi.fr/fr/rss",
+    "BBC News": "https://feeds.bbci.co.uk/news/world/rss.xml",
+    "DW": "https://rss.dw.com/rdf/rss-fr-all",
+    "Al Jazeera": "https://www.aljazeera.com/xml/rss/all.xml",
+    "Le Monde": "https://www.lemonde.fr/international/rss_full.xml",
+    "Le Figaro": "https://www.lefigaro.fr/rss/figaro_international.xml",
+    "franceinfo": "https://www.francetvinfo.fr/monde.rss",
+}
 
 
 def charger():
@@ -19,6 +28,7 @@ def charger():
 
 
 def main():
+    webhook = os.environ["WEBHOOK_ACTU_HEURE"]
     deja = set(charger())
     arts = [a for a in fetch_articles(FLUX_MONDE, 3, 8) if a["link"] not in deja]
     print(f"{len(arts)} nouvel(le)s article(s)")
@@ -33,7 +43,7 @@ Réponds en JSON : {{"histoires":[{{"titre":"titre factuel","resume":"...","sour
         embeds = histoires_en_embeds(parse_json(texte)["histoires"], arts, 0xE67E22)
         if embeds:
             heure = datetime.now(ZoneInfo("Europe/Paris")).strftime("%Hh%M")
-            post_discord(WEBHOOK, "Actu Monde (live)", f"🔄 **Mise à jour de l'actu mondiale — {heure}**", embeds)
+            post_discord(webhook, "Actu Monde (live)", f"🔄 **Mise à jour de l'actu mondiale — {heure}**", embeds)
 
     tous = [a["link"] for a in arts] + list(deja)
     with open(STATE, "w", encoding="utf-8") as f:
@@ -42,3 +52,4 @@ Réponds en JSON : {{"histoires":[{{"titre":"titre factuel","resume":"...","sour
 
 if __name__ == "__main__":
     main()
+
